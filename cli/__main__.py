@@ -231,17 +231,12 @@ async def completeTask(
                 # Extract meaningful status information
                 status = event.status
                 
-                # Show status updates
+                # Show status updates only - messages will be shown at the end
                 if hasattr(status, 'state'):
                     if status.state == 'working':
                         print_status_update("Working", "Agent is processing...")
                     elif status.state == 'input-required':
-                        # Only show the agent's message when we actually need input
-                        if hasattr(status, 'message') and status.message:
-                            message_text = extract_text_from_parts(status.message.parts)
-                            if message_text:
-                                print_agent_response(message_text)
-                        print_status_update("Input Required", "Please respond to the question above")
+                        print_status_update("Input Required", "Agent is asking a question...")
                     elif status.state == 'completed':
                         print_status_update("Completed", "Task finished")
                     else:
@@ -291,15 +286,15 @@ async def completeTask(
             print_agent_response(message_text)
         return True, contextId, taskId
     if taskResult:
-        # Check if we need to show the task result
+        # Always show the final message from the agent if there is one
+        if hasattr(taskResult.status, 'message') and taskResult.status.message:
+            final_message_text = extract_text_from_parts(taskResult.status.message.parts)
+            if final_message_text:
+                print_agent_response(final_message_text)
+        
+        # Check if we need to continue for input required state
         state = TaskState(taskResult.status.state)
         if state.name == TaskState.input_required.name:
-            # For input required state, extract and show the question nicely
-            if hasattr(taskResult.status, 'message') and taskResult.status.message:
-                question_text = extract_text_from_parts(taskResult.status.message.parts)
-                if question_text:
-                    print_agent_response(question_text)
-            
             return (
                 await completeTask(
                     client,
