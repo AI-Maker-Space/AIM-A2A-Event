@@ -7,6 +7,11 @@ import httpx
 from uuid import uuid4
 
 import asyncclick as click
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+from rich.json import JSON
+from rich.markdown import Markdown
 
 from a2a.client import A2AClient, A2ACardResolver
 from a2a.types import (
@@ -29,6 +34,65 @@ from a2a.types import (
 )
 from push_notification_auth import PushNotificationReceiverAuth
 
+# Initialize Rich console
+console = Console()
+
+def extract_text_from_parts(parts):
+    """Extract text content from message parts."""
+    texts = []
+    for part in parts:
+        # Handle the nested Part structure: Part(root=TextPart(...))
+        if hasattr(part, 'root') and hasattr(part.root, 'text'):
+            texts.append(part.root.text)
+        elif hasattr(part, 'text'):
+            texts.append(part.text)
+    return ' '.join(texts) if texts else ""
+
+def print_agent_response(message_text: str):
+    """Print agent response with nice formatting and colors."""
+    if not message_text.strip():
+        return
+    
+    # Create a panel with the agent's response
+    panel = Panel(
+        message_text,
+        title="🤖 Agent Response",
+        title_align="left",
+        border_style="blue",
+        padding=(0, 1)
+    )
+    console.print(panel)
+
+def print_user_message(message_text: str):
+    """Print user message with different styling."""
+    text = Text(f"👤 You: {message_text}", style="bold white")
+    console.print(text)
+
+def print_status_update(status: str, message: str = ""):
+    """Print status updates in a subtle way."""
+    status_text = Text(f"📊 Status: {status}", style="dim cyan")
+    if message:
+        status_text.append(f" - {message}")
+    console.print(status_text)
+
+def print_agent_card(card):
+    """Print agent card in a nice format."""
+    console.print("\n🎯 [bold cyan]Agent Information[/bold cyan]")
+    
+    # Extract key information from the card
+    card_data = card.model_dump(exclude_none=True)
+    
+    info_panel = Panel(
+        f"[bold]Name:[/bold] {card_data.get('name', 'Unknown')}\n"
+        f"[bold]Description:[/bold] {card_data.get('description', 'No description')}\n"
+        f"[bold]Version:[/bold] {card_data.get('version', 'Unknown')}\n"
+        f"[bold]URL:[/bold] {card_data.get('url', 'Unknown')}\n"
+        f"[bold]Capabilities:[/bold] Streaming: {card_data.get('capabilities', {}).get('streaming', False)}, "
+        f"Push Notifications: {card_data.get('capabilities', {}).get('pushNotifications', False)}",
+        title="Agent Card",
+        border_style="green"
+    )
+    console.print(info_panel)
 
 @click.command()
 @click.option("--agent", default="http://localhost:10000")
@@ -46,13 +110,12 @@ async def cli(
     header,
 ):
     headers = {h.split("=")[0]: h.split("=")[1] for h in header}
-    print(f"Will use headers: {headers}")
+    console.print(f"[dim]Will use headers: {headers}[/dim]")
     async with httpx.AsyncClient(timeout=30, headers=headers) as httpx_client:
         card_resolver = A2ACardResolver(httpx_client, agent)
         card = await card_resolver.get_agent_card()
 
-        print("======= Agent Card ========")
-        print(card.model_dump_json(exclude_none=True))
+        print_agent_card(card)
 
         notif_receiver_parsed = urllib.parse.urlparse(push_notification_receiver)
         notification_receiver_host = notif_receiver_parsed.hostname
@@ -80,7 +143,9 @@ async def cli(
         context_id = session if session > 0 else uuid4().hex
 
         while continue_loop:
-            print("=========  starting a new task ======== ")
+            console.print("\n" + "="*50)
+            console.print("[bold green]Starting new conversation[/bold green]")
+            console.print("="*50)
             continue_loop, _, taskId = await completeTask(
                 client,
                 streaming,
@@ -92,14 +157,13 @@ async def cli(
             )
 
             if history and continue_loop:
-                print("========= history ======== ")
+                console.print("\n[bold cyan]Conversation History[/bold cyan]")
                 task_response = await client.get_task(
                     {"id": taskId, "historyLength": 10}
                 )
-                print(
-                    task_response.model_dump_json(include={"result": {"history": True}})
-                )
-
+                # Show history in a prettier format
+                history_data = task_response.model_dump(include={"result": {"history": True}})
+                console.print(JSON.from_data(history_data))
 
 async def completeTask(
     client: A2AClient,
@@ -111,10 +175,14 @@ async def completeTask(
     contextId,
 ):
     prompt = click.prompt(
-        "\nWhat do you want to send to the agent? (:q or quit to exit)"
+        "\n💬 What do you want to send to the agent? (:q or quit to exit)",
+        type=str
     )
     if prompt == ":q" or prompt == "quit":
         return False, None, None
+
+    # Show what the user typed
+    print_user_message(prompt)
 
     message = Message(
         role="user",
@@ -123,20 +191,6 @@ async def completeTask(
         taskId=taskId,
         contextId=contextId,
     )
-
-    file_path = click.prompt(
-        "Select a file path to attach? (press enter to skip)",
-        default="",
-        show_default=False,
-    )
-    if file_path and file_path.strip() != "":
-        with open(file_path, "rb") as f:
-            file_content = base64.b64encode(f.read()).decode("utf-8")
-            file_name = os.path.basename(file_path)
-
-        message.parts.append(
-            Part(root=FilePart(file=FileWithBytes(name=file_name, bytes=file_content)))
-        )
 
     payload = MessageSendParams(
         id=str(uuid4()),
@@ -156,6 +210,7 @@ async def completeTask(
 
     taskResult = None
     message = None
+    last_status_state = None  # Track the last status to avoid spam
     if streaming:
         response_stream = client.send_message_streaming(
             SendStreamingMessageRequest(
@@ -165,19 +220,39 @@ async def completeTask(
         )
         async for result in response_stream:
             if isinstance(result.root, JSONRPCErrorResponse):
-                print("Error: ", result.root.error)
+                console.print(f"[red]❌ Error: {result.root.error}[/red]")
                 return False, contextId, taskId
             event = result.root.result
             contextId = event.contextId
             if isinstance(event, Task):
                 taskId = event.id
-            elif isinstance(event, TaskStatusUpdateEvent) or isinstance(
-                event, TaskArtifactUpdateEvent
-            ):
+                print_status_update("Task Created", f"ID: {taskId}")
+            elif isinstance(event, TaskStatusUpdateEvent):
                 taskId = event.taskId
+                # Extract meaningful status information
+                status = event.status
+                
+                # Show status updates only - messages will be shown at the end
+                # Only show status if it has changed to avoid spam
+                if hasattr(status, 'state') and status.state != last_status_state:
+                    last_status_state = status.state
+                    if status.state == 'working':
+                        print_status_update("Working", "Agent is processing...")
+                    elif status.state == 'input-required':
+                        print_status_update("Input Required", "Agent is asking a question...")
+                    elif status.state == 'completed':
+                        print_status_update("Completed", "Task finished")
+                    else:
+                        print_status_update("Status Update", f"State: {status.state}")
+            elif isinstance(event, TaskArtifactUpdateEvent):
+                taskId = event.taskId
+                print_status_update("Artifact Update", "New content available")
             elif isinstance(event, Message):
                 message = event
-            print(f"stream event => {event.model_dump_json(exclude_none=True)}")
+                # Extract and display the message text immediately
+                message_text = extract_text_from_parts(message.parts)
+                if message_text:
+                    print_agent_response(message_text)
         # Upon completion of the stream. Retrieve the full task if one was made.
         if taskId:
             taskResult = await client.get_task(
@@ -198,7 +273,7 @@ async def completeTask(
             )
             event = event.root.result
         except Exception as e:
-            print("Failed to complete the call", e)
+            console.print(f"[red]❌ Failed to complete the call: {e}[/red]")
         if not contextId:
             contextId = event.contextId
         if isinstance(event, Task):
@@ -209,24 +284,44 @@ async def completeTask(
             message = event
 
     if message:
-        print(f"\n{message.model_dump_json(exclude_none=True)}")
+        message_text = extract_text_from_parts(message.parts)
+        if message_text:
+            print_agent_response(message_text)
         return True, contextId, taskId
     if taskResult:
-        # Don't print the contents of a file.
-        task_content = taskResult.model_dump_json(
-            exclude={
-                "history": {
-                    "__all__": {
-                        "parts": {
-                            "__all__": {"file"},
-                        },
-                    },
-                },
-            },
-            exclude_none=True,
-        )
-        print(f"\n{task_content}")
-        ## if the result is that more input is required, loop again.
+        # Always show the final message from the agent if there is one
+        final_message_shown = False
+        
+        # Check for message in status
+        if hasattr(taskResult.status, 'message') and taskResult.status.message:
+            final_message_text = extract_text_from_parts(taskResult.status.message.parts)
+            if final_message_text:
+                print_agent_response(final_message_text)
+                final_message_shown = True
+        
+        # If no message in status, check the latest message in history
+        if not final_message_shown and hasattr(taskResult, 'history') and taskResult.history:
+            # Get the last agent message from history
+            for msg in reversed(taskResult.history):
+                if hasattr(msg, 'role') and msg.role == 'agent':
+                    final_message_text = extract_text_from_parts(msg.parts)
+                    if final_message_text:
+                        print_agent_response(final_message_text)
+                        final_message_shown = True
+                        break
+        
+        # If still no message, check for artifacts with content
+        if not final_message_shown and hasattr(taskResult, 'artifacts') and taskResult.artifacts:
+            for artifact in taskResult.artifacts:
+                # Artifacts have parts just like messages, not content
+                if hasattr(artifact, 'parts') and artifact.parts:
+                    artifact_text = extract_text_from_parts(artifact.parts)
+                    if artifact_text:
+                        print_agent_response(artifact_text)
+                        final_message_shown = True
+                        break
+        
+        # Check if we need to continue for input required state
         state = TaskState(taskResult.status.state)
         if state.name == TaskState.input_required.name:
             return (

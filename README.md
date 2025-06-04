@@ -219,15 +219,21 @@ If you prefer to start each agent manually or need to debug individual component
    uv run agents/ --agent-card agent_cards/car_rental_agent.json --port 10105
    ```
 
-7. Follow the steps in hosts/cli to start the cli app.
+7. Start the terminal:
+
+  In a new terminal window 
+
+  ```bash 
+  cd cli && uv run . --agent http://localhost:10101 
+  ```
 
 ### File/Directory Descriptions
 
-- **`agent_cards/`**: This directory stores the JSON schemas for each A2A Agent Card. These cards define the identity, capabilities, and endpoints of the different agents in the system. The MCP server serves these cards.
+- **`a2a_mcp/agent_cards/`**: This directory stores the JSON schemas for each A2A Agent Card. These cards define the identity, capabilities, and endpoints of the different agents in the system. The MCP server serves these cards.
 
   - `*_agent.json`: Each JSON file represents a specific agent's card (e.g., `air_ticketing_agent.json` for the agent that handles flight bookings).
 
-- **`src/a2a_mcp/`**: The primary Python source code for this A2A with MCP sample.
+- **`a2a_mcp/`**: The primary Python source code for this A2A with MCP sample.
 
   - **`agents/`**: Contains the Python implementations of the different types of agents described in the design document.
     - `__main__.py`: Main script to start up the agent services.
@@ -246,7 +252,9 @@ If you prefer to start each agent manually or need to debug individual component
     - `client.py`: A helper MCP client library that used to query the MCP server for agent cards or tools. This is a test utility and not used by the agents.
     - `server.py`: The implementation of the MCP server itself. This server hosts the agent cards as resources.
 
-- **`travel_agency.db`**: A light weight SQLLite DB that hosts the demo data.
+- **`cli/`**: Contains the command-line interface application for interacting with the travel agent system.
+
+- **`travel_agency.db`**: A light weight SQLite DB that hosts the demo data.
 
 ## Copyright and License
 
