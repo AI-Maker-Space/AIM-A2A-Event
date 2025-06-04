@@ -1,0 +1,18 @@
+A2A with MCP as Registry - Educational Implementation
+Copyright 2025 AI Makerspace
+
+This product contains software originally developed by Google LLC.
+
+Original Work:
+- A2A-MCP example from google-a2a/a2a-samples repository
+- Copyright 2024 Google LLC
+- Licensed under the Apache License, Version 2.0
+- Available at: https://github.com/google-a2a/a2a-samples
+
+Modifications:
+- Focused implementation for educational livestream purposes
+- Streamlined documentation and examples
+- Repository restructuring for educational clarity
+
+This software is licensed under the Apache License, Version 2.0.
+See LICENSE file for the full license text. 
