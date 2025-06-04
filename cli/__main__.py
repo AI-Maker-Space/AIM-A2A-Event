@@ -227,21 +227,23 @@ async def completeTask(
                 taskId = event.taskId
                 # Extract meaningful status information
                 status = event.status
-                if hasattr(status, 'state'):
-                    if status.state == 'working':
-                        print_status_update("Working", "Agent is processing...")
-                    elif status.state == 'input-required':
-                        print_status_update("Input Required", "Agent needs more information")
-                    elif status.state == 'completed':
-                        print_status_update("Completed", "Task finished")
-                    else:
-                        print_status_update("Status Update", f"State: {status.state}")
                 
-                # If there's a message in the status update, show it
+                # First, always show any message from the agent
                 if hasattr(status, 'message') and status.message:
                     message_text = extract_text_from_parts(status.message.parts)
                     if message_text:
                         print_agent_response(message_text)
+                
+                # Then show the status update
+                if hasattr(status, 'state'):
+                    if status.state == 'working':
+                        print_status_update("Working", "Agent is processing...")
+                    elif status.state == 'input-required':
+                        print_status_update("Input Required", "Please respond to the question above")
+                    elif status.state == 'completed':
+                        print_status_update("Completed", "Task finished")
+                    else:
+                        print_status_update("Status Update", f"State: {status.state}")
             elif isinstance(event, TaskArtifactUpdateEvent):
                 taskId = event.taskId
                 print_status_update("Artifact Update", "New content available")
