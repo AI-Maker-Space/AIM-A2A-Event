@@ -231,17 +231,16 @@ async def completeTask(
                 # Extract meaningful status information
                 status = event.status
                 
-                # First, always show any message from the agent
-                if hasattr(status, 'message') and status.message:
-                    message_text = extract_text_from_parts(status.message.parts)
-                    if message_text:
-                        print_agent_response(message_text)
-                
-                # Then show the status update
+                # Show status updates
                 if hasattr(status, 'state'):
                     if status.state == 'working':
                         print_status_update("Working", "Agent is processing...")
                     elif status.state == 'input-required':
+                        # Only show the agent's message when we actually need input
+                        if hasattr(status, 'message') and status.message:
+                            message_text = extract_text_from_parts(status.message.parts)
+                            if message_text:
+                                print_agent_response(message_text)
                         print_status_update("Input Required", "Please respond to the question above")
                     elif status.state == 'completed':
                         print_status_update("Completed", "Task finished")
