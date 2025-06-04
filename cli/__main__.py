@@ -210,6 +210,7 @@ async def completeTask(
 
     taskResult = None
     message = None
+    last_status_state = None  # Track the last status to avoid spam
     if streaming:
         response_stream = client.send_message_streaming(
             SendStreamingMessageRequest(
@@ -232,7 +233,9 @@ async def completeTask(
                 status = event.status
                 
                 # Show status updates only - messages will be shown at the end
-                if hasattr(status, 'state'):
+                # Only show status if it has changed to avoid spam
+                if hasattr(status, 'state') and status.state != last_status_state:
+                    last_status_state = status.state
                     if status.state == 'working':
                         print_status_update("Working", "Agent is processing...")
                     elif status.state == 'input-required':
