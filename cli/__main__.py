@@ -313,11 +313,13 @@ async def completeTask(
         # If still no message, check for artifacts with content
         if not final_message_shown and hasattr(taskResult, 'artifacts') and taskResult.artifacts:
             for artifact in taskResult.artifacts:
-                if hasattr(artifact, 'content') and artifact.content:
-                    # Display artifact content as final response
-                    print_agent_response(str(artifact.content))
-                    final_message_shown = True
-                    break
+                # Artifacts have parts just like messages, not content
+                if hasattr(artifact, 'parts') and artifact.parts:
+                    artifact_text = extract_text_from_parts(artifact.parts)
+                    if artifact_text:
+                        print_agent_response(artifact_text)
+                        final_message_shown = True
+                        break
         
         # Check if we need to continue for input required state
         state = TaskState(taskResult.status.state)
