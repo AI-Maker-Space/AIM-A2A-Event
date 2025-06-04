@@ -121,14 +121,11 @@ flowchart LR
         T3["Task Agent N (e.g., Car Rental Reservation)"]
   end
     UI --> E["Orchestrator Agent"]
-    E --> P["Planner Agent"] & MCP & A["Summary Agent"] & T1 & T2 & T3 & UI
-    T2 --> E & MCP
+    E --> P["Planner Agent"] & MCP & A["Summary Agent"] & T1 & T3 & UI
     T3 --> E & MCP
     T1 --> MCP
      T1:::taskAgent
      T1:::Sky
-     T2:::taskAgent
-     T2:::Sky
      T3:::taskAgent
      T3:::Sky
     classDef taskAgent fill:#f9f,stroke:#333,stroke-width:2px
