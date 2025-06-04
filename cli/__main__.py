@@ -290,10 +290,34 @@ async def completeTask(
         return True, contextId, taskId
     if taskResult:
         # Always show the final message from the agent if there is one
+        final_message_shown = False
+        
+        # Check for message in status
         if hasattr(taskResult.status, 'message') and taskResult.status.message:
             final_message_text = extract_text_from_parts(taskResult.status.message.parts)
             if final_message_text:
                 print_agent_response(final_message_text)
+                final_message_shown = True
+        
+        # If no message in status, check the latest message in history
+        if not final_message_shown and hasattr(taskResult, 'history') and taskResult.history:
+            # Get the last agent message from history
+            for msg in reversed(taskResult.history):
+                if hasattr(msg, 'role') and msg.role == 'agent':
+                    final_message_text = extract_text_from_parts(msg.parts)
+                    if final_message_text:
+                        print_agent_response(final_message_text)
+                        final_message_shown = True
+                        break
+        
+        # If still no message, check for artifacts with content
+        if not final_message_shown and hasattr(taskResult, 'artifacts') and taskResult.artifacts:
+            for artifact in taskResult.artifacts:
+                if hasattr(artifact, 'content') and artifact.content:
+                    # Display artifact content as final response
+                    print_agent_response(str(artifact.content))
+                    final_message_shown = True
+                    break
         
         # Check if we need to continue for input required state
         state = TaskState(taskResult.status.state)
