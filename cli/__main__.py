@@ -41,7 +41,10 @@ def extract_text_from_parts(parts):
     """Extract text content from message parts."""
     texts = []
     for part in parts:
-        if hasattr(part, 'text'):
+        # Handle the nested Part structure: Part(root=TextPart(...))
+        if hasattr(part, 'root') and hasattr(part.root, 'text'):
+            texts.append(part.root.text)
+        elif hasattr(part, 'text'):
             texts.append(part.text)
     return ' '.join(texts) if texts else ""
 
